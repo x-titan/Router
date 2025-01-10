@@ -131,3 +131,13 @@ export function call(fn, err, req, res, next) {
 
   if (isDefined(error)) next(error)
 }
+
+export function pathname(url) {
+  assert(typeof url === "string", "argument must be a string")
+
+  return url.trim()
+    .replace(/[\?|#].*$/, '')
+    .replace(/^(?:https?\:)\/\//, '')
+    .replace(/^.*?(\/.*)/, '$1')
+    .replace(/\/$/, '')
+}

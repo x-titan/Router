@@ -18,10 +18,10 @@ const proto = {
   init() {
     this.mount = false
     this.path = "/"
-    this.regex = new Regex(":path(.*)")
     this.stack = []
   },
 
+  //#region Private
   _path(path) {
     path = normalize(path)
 
@@ -69,6 +69,27 @@ const proto = {
 
     return route
   },
+  //#endregion
+
+  route(path) {
+    var route = new Route(path)
+    this.stack.push(route)
+    return route
+  },
+
+  add(method, path, callback) {
+    var route = this._route(path, callback)
+
+    if (this._isEmptyMethod(method)) {
+      route.all = true
+    } else {
+      route.method = method
+    }
+
+    this.stack.push(route)
+
+    return this
+  },
 
   use(path, callback) {
     if (isFunction(path)) {
@@ -81,20 +102,6 @@ const proto = {
 
     var route = this._route(path, callback)
     route.all = true
-
-    this.stack.push(route)
-
-    return this
-  },
-
-  add(method, path, callback) {
-    var route = this._route(path, callback)
-
-    if (this._isEmptyMethod(method)) {
-      route.all = true
-    } else {
-      route.method = method
-    }
 
     this.stack.push(route)
 
