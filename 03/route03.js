@@ -81,12 +81,8 @@ export default class Route {
 }
 
 function escapeHeadMethod(method, methods) {
-  if (method === "head" && !this.methods.head) {
-    method = 'get'
-  }
-
   return (
-    (method === "head" && !this.methods.head)
+    (method === "head" && !methods.head)
       ? "get"
       : method
   )

@@ -31,13 +31,7 @@ export default class Layer {
       return {}
     }
 
-    let match = this.regex.match(path)
-
-    if (match) {
-      return match
-    }
-
-    return false
+    return this.regex.match(path) || false
   }
 
   handle(err, req, res, next) {

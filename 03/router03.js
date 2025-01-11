@@ -53,6 +53,24 @@ export default class Router {
     next()
   }
 
+  route(path) {
+    path = normalize(path)
+    path = pathname(path)
+
+    function handle(req, res, next) {
+      route.dispatch(req, res, next)
+    }
+
+    // Layer for router
+    var layer = new Layer(path, handle, { end: true })
+    // route no have layer
+    var route = (layer.route = new Route(path))
+
+    this.stack.push(layer)
+
+    return route
+  }
+
   use(path, ...handlers) {
     if (isFunction(path)) {
       handlers.unshift(path)
@@ -71,24 +89,6 @@ export default class Router {
     }
 
     return this
-  }
-
-  route(path) {
-    path = normalize(path)
-    path = pathname(path)
-
-    function handle(req, res, next) {
-      route.dispatch(req, res, next)
-    }
-
-    // Layer for router
-    var layer = new Layer(path, handle, { end: true })
-    // route no have layer
-    var route = (layer.route = new Route(path))
-
-    this.stack.push(layer)
-
-    return route
   }
 
   add(method, path, ...handlers) {
