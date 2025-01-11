@@ -1,99 +1,92 @@
-import { assert, isFunction, pathname } from "../utils.js"
-import Layer from "./layer02.js"
+import normalize from "../lib/normalize-path/index.js"
+import Regex from "../lib/path-to-regex/index.js"
+import { defer, isDefined, isEmpty, trytocatch } from "../utils.js"
+
+const defaultAllPath = ":path(.*)"
 
 export default class Route {
-  constructor(path = "/") {
-    this.path = pathname(path)
-    /** @type {Layer[]} */
-    this.stack = []
-    this.methods = Object.create(null)
+  constructor(path, handle) {
+    if (isEmpty(path) || path === "" || path === "*") {
+      path = defaultAllPath
+    }
+
+    path = normalize(path || "/")
+
+    this.all = false
+    this.method = undefined
+    this.path = path
+    this.regex = new Regex(path)
+    this.handlers = [handle]
+  }
+
+  pushHandle(handle) {
+    this.handlers.push(handle)
+    return this
   }
 
   hasMethod(method) {
-    method = method.toLowerCase()
-
-    if (this.methods._all) {
+    if (this.all) {
       return true
     }
 
-    return (!!this.methods[escapeHeadMethod(method, this.methods)])
+    method = method.toLowerCase()
+
+    if (method === "head" && this.method === "get") {
+      method = "get"
+    }
+
+    return this.method === method
+  }
+
+  match(method, path) {
+    return (
+      this.hasMethod(method) &&
+      this.matchParams(path)
+    )
+  }
+
+  matchParams(path) {
+    path = normalize(path)
+
+    var matches = this.regex.match(path)
+
+    if (matches) {
+      return matches
+    }
+
+    return false
   }
 
   dispatch(req, res, out) {
-    // var route = this
-    var stack = this.stack
-    let index = 0
-    var method = req.app.method
-
-    method = escapeHeadMethod(method, this.methods)
+    // var self = this
+    var handlers = this.handlers
+    var index = 0
 
     function next(err) {
-      var layer = stack[index++]
+      var fn = handlers[index++]
 
-      if (!layer) {
-        out(err)
+      if (!fn) {
+        return out(err)
       }
 
-      if (layer.matchMethod(method)) {
-        layer.handle(err, req, res, next)
-      } else next(err)
+      call(fn, err, req, res, next)
     }
 
     next()
   }
 
-  all(handler) {
-    for (const fn of [...arguments].flat(Infinity)) {
-      assert(isFunction(fn), "argument handler must be a function")
-
-      var layer = newLayer("/", "*", fn)
-      this.stack.push(layer)
-    }
-
-    if (handler) {
-      this.methods._all = true
-    }
-
-    return this
-  }
-
-  get(handler) {
-    for (const fn of [...arguments].flat(Infinity)) {
-      assert(isFunction(fn), "argument handler must be a function")
-
-      var layer = newLayer("/", "get", fn)
-      this.stack.push(layer)
-    }
-
-    return this
-  }
-
-  post(handler) {
-    for (const fn of [...arguments].flat(Infinity)) {
-      assert(isFunction(fn), "argument handler must be a function")
-
-      var layer = newLayer("/", "post", fn)
-      this.stack.push(layer)
-    }
-
-    return this
-  }
+  static defaultAllPath = defaultAllPath
 }
 
-function escapeHeadMethod(method, methods) {
-  if (method === "head" && !this.methods.head) {
-    method = 'get'
+function call(fn, err, req, res, next) {
+  var length = fn.length
+  var error
+
+  if (length === 4 && isDefined(err)) {
+    [error] = trytocatch(fn, err, req, res, next)
+  } else if (length < 4 && isEmpty(err)) {
+    [error] = trytocatch(fn, req, res, next)
   }
 
-  return (
-    (method === "head" && !this.methods.head)
-      ? "get"
-      : method
-  )
-}
-
-function newLayer(path, method, handler) {
-  var layer = new Layer(path, handler)
-  layer.method = method || "*"
-  return layer
+  if (isDefined(error)) next(error)
 }

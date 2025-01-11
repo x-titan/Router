@@ -1,7 +1,7 @@
 import normalize from "../lib/normalize-path/index.js";
 import Regex from "../lib/path-to-regex/index.js";
-import { defaultParam, trytocatch } from "../utils";
-import Route from "./route02.js";
+import { defaultParam, trytocatch } from "../utils.js";
+import Route from "./route03.js";
 
 export default class Layer {
   constructor(path, handler, options) {

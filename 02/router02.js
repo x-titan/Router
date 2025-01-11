@@ -1,126 +1,160 @@
 import normalize from "../lib/normalize-path/index.js"
-import { assert, defaultParam, isFunction, mixin, pathname } from "../utils.js"
-import { METHODS } from "./const.js"
-import Layer from "./layer02.js"
+import Regex from "../lib/path-to-regex/index.js"
+import { call, defaultParam, isDefined, isEmpty, isFunction } from "../utils.js"
 import Route from "./route02.js"
 
-export default class Router {
-  constructor(options) {
-    /** @type {Layer[]} */
-    this.stack = []
-    this.path = "/"
+export default function Router(options) {
+  function router(req, res, out) {
+    return router.handle(req, res, out)
   }
 
-  handle(req, res, callback) {
-    assert(isFunction(callback), "argument callback is required")
-
-    let index = 0
-    let stack = this.stack
-
-    req.params = defaultParam(req.params, {})
-    req.app = defaultParam(req.app, {
-      url: req.url,
-      pathname: pathname(req.url),
-      normUrl: normalize(req.url),
-      methods: req.method.toLowerCase()
-    })
-
-    function next(err) {
-      var layer = stack[index++]
-
-      if (!layer) {
-        return callback(err)
-      }
-
-      // var route = layer.route
-      var pathname = req.app.pathname
-      // var method = req.app.method
-      var match = layer.match(pathname)
-
-      // if (!route) {
-      //   return next(err)
-      // }
-
-      // var hasMethod = route.hasMethod(method)
-
-      if (match) {
-        mixin(req.params, match)
-
-        layer.handle(err, req, res, next)
-      } else next(err)
-    }
-
-    next()
-  }
-
-  use(path, ...handlers) {
-    if (isFunction(path)) {
-      handlers.unshift(path)
-      path = "/"
-    }
-
-    path = normalize(path)
-    path = pathname(path)
-
-    for (const fn of handlers) {
-      assert(isFunction(fn), "argument handler must be a function")
-
-      var layer = new Layer(path, fn, { end: false })
-      layer.route = undefined
-      this.stack.push(layer)
-    }
-
-    return this
-  }
-
-  route(path) {
-    path = normalize(path)
-    path = pathname(path)
-
-    function handle(req, res, next) {
-      route.dispatch(req, res, next)
-    }
-
-    // Layer for router
-    var layer = new Layer(path, handle, { end: true })
-    // route no have layer
-    var route = (layer.route = new Route(path))
-
-    this.stack.push(layer)
-
-    return route
-  }
-
-  add(method, path, ...handlers) {
-    var route = this.route(path)
-    route[method].apply(route, handlers)
-    return this
-  }
-
-  all(path, ...handlers) {
-    var route = this.route(path)
-    route.all(...handlers)
-    return this
-  }
-
-  // get(path, ...handlers) {
-  //   var route = this.route(path)
-  //   route.get(...handlers)
-  //   return this
-  // }
-
-  // post(path, ...handlers) {
-  //   var route = this.route(path)
-  //   route.post(...handlers)
-  //   return this
-  // }
+  // Object.assign(router, Emitter)
+  Object.assign(router, proto)
+  router.init()
+  return router
 }
 
-// declare methods: GET, POST, HEAD, ...
-METHODS.forEach((method) => {
-  Router.prototype[method] = function (path, ...handlers) {
-    var route = this.route(path)
-    route[method].apply(route, handlers)
+const proto = {
+  init() {
+    this.mount = false
+    this.path = "/"
+    this.stack = []
+  },
+
+  //#region Private
+  _path(path) {
+    path = normalize(path)
+
+    if (isEmpty(path) || path === "" || path === "*") {
+      path = Route.defaultAllPath
+    }
+    return path
+  },
+  _isEmptyMethod(method) {
+    return (
+      isEmpty(method) ||
+      method === "" ||
+      method === "*" ||
+      method === "all"
+    )
+  },
+
+  _route(path, callback) {
+    path = this._path(path)
+    var fn = callback
+
+    if (isDefined(callback) && isFunction(callback.handle)) {
+      var app = callback
+      app.path = path
+      app.mount = this
+
+      path = normalize(path + "/" + Route.defaultAllPath)
+
+      fn = function (req, res, next) {
+        var storePath = req.app.path
+
+        req.app.path = res.params.path || "/"
+
+        function restore(err) {
+          req.app.path = storePath
+
+          return next(err)
+        }
+
+        return app.handle(req, res, restore)
+      }
+    }
+
+    var route = new Route(path, fn)
+
+    return route
+  },
+  //#endregion
+
+  route(path) {
+    var route = new Route(path)
+    this.stack.push(route)
+    return route
+  },
+
+  add(method, path, callback) {
+    var route = this._route(path, callback)
+
+    if (this._isEmptyMethod(method)) {
+      route.all = true
+    } else {
+      route.method = method
+    }
+
+    this.stack.push(route)
+
     return this
-  }
-})
+  },
+
+  use(path, callback) {
+    if (isFunction(path)) {
+      for (const fn of arguments) {
+        this.use(Route.defaultAllPath, fn)
+      }
+
+      return this
+    }
+
+    var route = this._route(path, callback)
+    route.all = true
+
+    this.stack.push(route)
+
+    return this
+  },
+
+  handle(req, res, out) {
+    var self = this
+    var stack = this.stack
+    let index = 0
+
+    req.app = defaultParam(
+      req.app,
+      {
+        method: req.method.toLowerCase(),
+        path: req.url,
+      }
+    )
+
+    res.params = defaultParam(res.params, {})
+
+    function next(err) {
+      var route = stack[index++]
+
+      if (!route) {
+        return out(err)
+      }
+
+      var method = req.app.method
+      var path = req.app.path
+      var match = route.match(method, path)
+
+      if (match) {
+        match = route.matchParams(path)
+        Object.assign(res.params, match)
+
+        return route.dispatch(req, res, next)
+      }
+
+      next(err)
+    }
+    next()
+  },
+
+  all(path, callback) {
+    return this.add("all", path, callback)
+  },
+
+  get(path, callback) {
+    return this.add("get", path, callback)
+  },
+
+  post(path, callback) {
+    return this.add("get", path, callback)
+  },
+}
