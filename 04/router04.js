@@ -36,7 +36,10 @@ const proto = {
     }
   },
 
-  route(path) { },
+  route(path) {
+    var route = new Route(path)
+    
+  },
 
   use(path, ...handlers) { },
 
