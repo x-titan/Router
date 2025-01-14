@@ -5,8 +5,12 @@ import Route from "./route03.js";
 
 export default class Layer {
   constructor(path, handler, options) {
-    path = normalize(path)
+    path = normalize(path || "/")
     options = defaultParam(options, {})
+
+    if (path === "/") {
+      path = ":path(.*)"
+    }
 
     this.path = path
     this.regex = new Regex(path)
@@ -19,7 +23,7 @@ export default class Layer {
   }
 
   matchMethod(method) {
-    if (this.method === "*") {
+    if (this.method === undefined) {
       return true
     }
 

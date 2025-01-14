@@ -132,6 +132,9 @@ export function call(fn, err, req, res, next) {
   if (isDefined(error)) next(error)
 }
 
+/**
+ * @param {string} url
+ */
 export function pathname(url) {
   assert(typeof url === "string", "argument must be a string")
 

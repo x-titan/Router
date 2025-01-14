@@ -1,9 +1,13 @@
-import { assert, isFunction, pathname } from "../utils.js"
+import { METHODS } from "../const.js"
+import normalize from "../lib/normalize-path/index.js"
+import { assert, isDefined, isFunction, pathname } from "../utils.js"
 import Layer from "./layer03.js"
 
 export default class Route {
   constructor(path = "/") {
-    this.path = pathname(path)
+    path = pathname(path)
+    path = normalize(path)
+    this.path = path
     /** @type {Layer[]} */
     this.stack = []
     this.methods = Object.create(null)
@@ -20,8 +24,8 @@ export default class Route {
   }
 
   dispatch(req, res, out) {
-    // var route = this
-    var stack = this.stack
+    var route = this
+    const stack = this.stack
     let index = 0
     var method = req.app.method
 
@@ -31,7 +35,7 @@ export default class Route {
       var layer = stack[index++]
 
       if (!layer) {
-        out(err)
+        return out(err)
       }
 
       if (layer.matchMethod(method)) {
@@ -43,42 +47,71 @@ export default class Route {
   }
 
   all(handler) {
-    for (const fn of [...arguments].flat(Infinity)) {
+    assert(isDefined(handler), "argument handler is required")
+
+    for (const fn of arguments) {
       assert(isFunction(fn), "argument handler must be a function")
 
-      var layer = newLayer("/", "*", fn)
+      const layer = new Layer('/', fn)
+      layer.method = undefined
       this.stack.push(layer)
     }
 
-    if (handler) {
-      this.methods._all = true
-    }
+    this.methods._all = true
 
     return this
   }
 
   get(handler) {
-    for (const fn of [...arguments].flat(Infinity)) {
+    assert(isDefined(handler), "argument handler is required")
+
+    for (const fn of arguments) {
       assert(isFunction(fn), "argument handler must be a function")
 
-      var layer = newLayer("/", "get", fn)
+      const layer = new Layer('/', fn)
+      layer.method = "get"
       this.stack.push(layer)
     }
+
+    this.methods.get = true
 
     return this
   }
 
   post(handler) {
-    for (const fn of [...arguments].flat(Infinity)) {
+    assert(isDefined(handler), "argument handler is required")
+
+    for (const fn of arguments) {
       assert(isFunction(fn), "argument handler must be a function")
 
-      var layer = newLayer("/", "post", fn)
+      const layer = new Layer('/', fn)
+      layer.method = "post"
       this.stack.push(layer)
     }
+
+    this.methods.post = true
 
     return this
   }
 }
+
+METHODS.forEach((method) => {
+  Route.prototype[method] = function (handler) {
+    assert(isDefined(handler), "argument handler is required")
+
+    for (const fn of arguments) {
+      assert(isFunction(fn), "argument handler must be a function")
+
+      const layer = new Layer('/', fn)
+      layer.method = method
+      this.stack.push(layer)
+    }
+
+    this.methods[method] = true
+
+    return this
+  }
+})
 
 function escapeHeadMethod(method, methods) {
   return (
@@ -90,6 +123,6 @@ function escapeHeadMethod(method, methods) {
 
 function newLayer(path, method, handler) {
   var layer = new Layer(path, handler)
-  layer.method = method || "*"
+  layer.method = method || undefined
   return layer
 }

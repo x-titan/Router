@@ -1,6 +1,6 @@
 import { defaultTrailingSlash } from "../const.js"
 import normalize from "../lib/normalize-path/index.js"
-import { pathname } from "../utils.js"
+import { assert, isFunction, pathname } from "../utils.js"
 import Layer from "./layer05.js"
 
 //
@@ -35,6 +35,43 @@ export default class Route {
     this.stack = []
   }
 
+  handle(req, res, done) {
+    assert(isFunction(done), "argument done must be a function")
+
+    var route = this
+    const stack = this.stack
+    var index = 0
+
+
+    function next(err) {
+
+    }
+  }
+
+
+  dispatch(req, res, done) {
+    assert(isFunction(done), "argument done must be a function")
+
+    const stack = this.stack
+    var index = 0
+
+    function next(err) {
+      var layer = stack[index++]
+
+      if (!layer) {
+        return done(err)
+      }
+
+      var match = layer.match()
+
+      if (match) {
+        layer.handle(err, req, res, next)
+      } else { next(err) }
+    }
+
+    next()
+  }
+
   /**
    * @param {string} path 
    * @return {this}
@@ -43,60 +80,119 @@ export default class Route {
     path = pathname("/" + path)
     path = normalize(path)
 
-    var { route, leftPath, rightPath, fullPath } = findStack(path, this)
-    var child = null
+    var { route, leftPath, rightPath, fullPath } = findRoute(path, this)
+
     if (rightPath !== "") {
-      var keys = Reflect.ownKeys(route.routes)
-      keys.forEach((key) => {
-        if ((new RegExp("^" + rightPath + "/")).test(key)) {
-          var segments = key.split("/")
-          for (let i = 0; i < segments.length; i++) {
-
-            if (segments.slice(0, i).join("/") === rightPath) {
-              console.log(rightPath, key)
-              child = route.routes[key]
-              child.path = segments.slice(i).join("/")
-              delete route.routes[key]
-            }
-          }
-        }
-      })
-
-      route.routes[rightPath] = new Route(rightPath)
-      if (child) {
-
-        route.routes[rightPath].routes[child.path] = child
+      if (!keychanger(rightPath, this)) {
+        console.log("route", route, rightPath)
+        route = route.routes[rightPath] = new Route(rightPath)
       }
-      route = route.routes[rightPath]
     }
 
     return route
   }
 
   all(path, ...handlers) {
+    assert(handlers.length > 0, "handlers undefined")
 
+    var route = this.route(path || "/")
+    route.methods["_all"] = true
+    route.methodsAll = true
+
+    for (const handler of handlers) {
+      assert(isFunction(handler), "handler must be a function")
+
+      var layer = new Layer(route.path, handlers)
+      layer.method = undefined
+
+      route.stack.push(layer)
+    }
+
+    return this
   }
 
   add(method, path, ...handlers) {
+    assert(handlers.length > 0, "handlers undefined")
 
+    var route = this.route(path || "/")
+    route.methods[method] = true
+
+    for (const handler of handlers) {
+      assert(isFunction(handler), "handler must be a function")
+
+      var layer = new Layer(route.path, handlers)
+      layer.method = method
+
+      route.stack.push(layer)
+    }
+
+    return this
   }
 
   get(path, ...handlers) {
+    assert(handlers.length > 0, "handlers undefined")
+
     var route = this.route(path || "/")
     route.methods.get = true
 
-    route.stack
+    for (const handler of handlers) {
+      assert(isFunction(handler), "handler must be a function")
+
+      var layer = new Layer(route.path, handlers)
+      layer.method = "get"
+
+      route.stack.push(layer)
+    }
+
+    return this
   }
 
   post(path, ...handlers) {
-    this.methods.post = true
+    assert(handlers.length > 0, "handlers undefined")
 
+    var route = this.route(path || "/")
+    route.methods.post = true
+
+    for (const handler of handlers) {
+      assert(isFunction(handler), "handler must be a function")
+
+      var layer = new Layer(route.path, handlers)
+      layer.method = "get"
+
+      route.stack.push(layer)
+    }
+
+    return this
   }
 }
 
+/**
+ * @param {string} path
+ * @param {Route} route
+ * @return {boolean}
+ */
+function keychanger(path, route) {
+  var keys = Reflect.ownKeys(route.routes)
+  var keychanged = false
 
+  for (const key of keys) {
+    if (key.startsWith(path + "/")) {
+      keychanged = true
 
-function findStack(path, route) {
+      var child = new Route(path)
+      var childPath = route.routes[key].path = key.slice(path.length + 1)
+
+      child.routes[childPath] = route.routes[key]
+      route.routes[path] = child
+      delete route.routes[key]
+      route = child
+    }
+  }
+
+  return keychanged
+}
+
+function findRoute(path, route) {
   var fullPath = []
   var leftPath = ""
   var rightPath = ""
@@ -132,7 +228,7 @@ function findStack(path, route) {
 //   }
 //   route(path) {
 
-//     var { route, leftPath, rightPath, fullPath } = findStack(path, this)
+//     var { route, leftPath, rightPath, fullPath } = findRoute(path, this)
 
 //     if (rightPath !== "") {
 //       var keys = Reflect.ownKeys(route)

@@ -1,3 +1,5 @@
+import { mixin } from "../utils.js"
+
 export default function Simulator(app, options) {
   if (!(this instanceof Simulator)) {
     return new new Simulator(app, options)
@@ -5,7 +7,7 @@ export default function Simulator(app, options) {
 
   this.app = app
 
-
+  mixin(this, simulatorProto, true)
 }
 
 const simulatorProto = {
