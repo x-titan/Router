@@ -1,3 +1,5 @@
+import { mixin } from "../src/utils.js"
+
 export default function Simulator(app, options) {
   if (!(this instanceof Simulator)) {
     return new new Simulator(app, options)
@@ -5,7 +7,7 @@ export default function Simulator(app, options) {
 
   this.app = app
 
-
+  mixin(this, simulatorProto, true)
 }
 
 const simulatorProto = {
@@ -37,7 +39,7 @@ function newRequest(options) {
 
   var res = {
     end: options.end || function (body) {
-      console.log("[response]", body)
+      console.log("[response end]", body)
     },
     ...options.res,
   }
@@ -46,7 +48,8 @@ function newRequest(options) {
     options?.finalhandler?.call(req, res, options.finalhandlerOpts) ||
     options.out ||
     function (err) {
-      console.error(err)
+      console.log("[simulate end]", req, res)
+      err && console.error(err)
       res.end("[404]")
     }
   )

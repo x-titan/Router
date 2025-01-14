@@ -1,12 +1,18 @@
+import normalize from "../lib/normalize-path/index.js"
 
 /**
  * @param {boolean} condition
  * @param {string} message
+ * @throws {Error}
  */
 export function assert(condition, message) {
-  if (!condition) throw Error(message);
+  if (!condition) throw Error(message)
 }
 
+/**
+ * @param {unknown} value 
+ * @param {"undefined" | "number" | "string" | "function" | "object"} type 
+ */
 export function isTypeOf(value, type) {
   return ((typeof value) === type)
 }
@@ -79,6 +85,12 @@ export function defaultParam(value, defaultValue) {
   return isDefined(value) ? value : defaultValue
 }
 
+/**
+ * @template T
+ * @param {() => T} fn
+ * @param  {...any} args
+ * @return {[Error | null, T]}
+ */
 export function trytocatch(fn, ...args) {
   assert(isFunction(fn), "First argument must be a function.")
 
@@ -94,7 +106,7 @@ export function trytocatch(fn, ...args) {
  * @param {T} target
  * @param {U} source
  * @param {boolean} mutate
- * @returns {T & U}
+ * @return {T & U}
  */
 export function mixin(target, source, mutate = false) {
   if (!!mutate) {
@@ -108,17 +120,10 @@ export function defer(fn, ...args) {
   setTimeout(fn.bind(fn, ...args), 50)
 }
 
-// export const defer = (
-//   isFunction(setImmediate) ?
-//     setImmediate :
-
-//    return function (fn, ...args) {
-//       assert(isFunction(fn), "First argument must be function")
-
-//       setTimeout(fn.bind(fn, ...args), 50)
-//     }
-// )
-
+/**
+ * @param {Function} fn
+ * @param {(err:Error) => void} next
+ */
 export function call(fn, err, req, res, next) {
   var length = fn.length
   var error
@@ -127,17 +132,23 @@ export function call(fn, err, req, res, next) {
     [error] = trytocatch(fn, err, req, res, next)
   } else if (length < 4 && isEmpty(err)) {
     [error] = trytocatch(fn, req, res, next)
-  }
+  } else next(err)
 
   if (isDefined(error)) next(error)
 }
 
+/**
+ * @param {string} url
+ */
 export function pathname(url) {
   assert(typeof url === "string", "argument must be a string")
 
-  return url.trim()
+  if (!url.startsWith("/")) {
+    url = "/" + url
+  }
+
+  return normalize(url).trim()
     .replace(/[\?|#].*$/, '')
     .replace(/^(?:https?\:)\/\//, '')
     .replace(/^.*?(\/.*)/, '$1')
-    .replace(/\/$/, '')
 }
