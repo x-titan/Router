@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 import { mixin } from "../src/utils.js"
-=======
-import { mixin } from "../utils.js"
->>>>>>> b60684a35cba05e35b961bf803927d9c88155df9
 
 export default function Simulator(app, options) {
   if (!(this instanceof Simulator)) {
